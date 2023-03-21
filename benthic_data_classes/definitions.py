@@ -17,7 +17,9 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
     ):
         """
         Dataset for BenthicNet data.
-
+        """
+        """
+        
         Parameters
         ----------
         root_dir : str
