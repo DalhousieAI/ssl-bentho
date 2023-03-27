@@ -12,7 +12,7 @@ import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy 
+from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
 # Shakhboz's imports
@@ -44,18 +44,18 @@ METHODS = {
 
 def main():
     parser = argparse.ArgumentParser(description='Parameters for SSL benthic habitat project')
-    
+
     # Required parameters
     parser.add_argument('--ssl_cfg', type=str, required=True,
-                            help='set cfg file for SSL')                         
+                            help='set cfg file for SSL')
     parser.add_argument('--aug_stack_cfg', type=str, required=True,
-                            help='set cfg file for augmentations')                        
+                            help='set cfg file for augmentations')
     parser.add_argument('--nodes', type=int, required=True,
-                            help='number of nodes') 
+                            help='number of nodes')
     parser.add_argument('--gpus', type=int, required=True,
-                            help='number of gpus per node') 
+                            help='number of gpus per node')
     parser.add_argument('--method', type=str, required=True,
-                            help='type of SSL method') 
+                            help='type of SSL method')
     # Other parameters
     parser.add_argument('--mini', type=bool, default=False,
                             help='use mini-dataset')
@@ -82,24 +82,24 @@ def main():
 
     # common parameters for all methods
     # some parameters for extra functionally are missing, but don't mind this for now.
-    
+
     ssl_cfg_name = args.ssl_cfg
-    
+
     with open("./ssl_cfgs/" + ssl_cfg_name) as f:
         ssl_cfg = f.read()
-        
+
     kwargs = json.loads(ssl_cfg)
     cfg = OmegaConf.create(kwargs)
 
     model = METHODS[args.method](cfg)
 
     # we first prepare our single transformation pipeline
-    
+
     aug_stack_name = args.aug_stack_cfg
 
     with open("./ssl_cfgs/aug_stacks/" + aug_stack_name) as f:
         aug_stack_cfg = f.read()
-        
+
     transform_kwargs = json.loads(aug_stack_cfg)
     transform_cfg = OmegaConf.create(transform_kwargs)
 
