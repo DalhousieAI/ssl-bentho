@@ -4,6 +4,7 @@ import time
 import tarfile
 import torch
 
+import benthicnet.io
 import numpy as np
 import pandas as pd
 import PIL.Image
@@ -37,7 +38,7 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
             self.tar_dir = os.path.join(root_dir, "tar")
         else:
             self.tar_dir = root_dir
-        self.dataframe = pd.read_csv(csv_file, low_memory=False)
+        self.dataframe = benthicnet.io.read_csv(csv_file)
         #self.dataframe = self.dataframe.head(64)
         if "path" not in self.dataframe.columns:
             self.dataframe["path"] = (
@@ -144,7 +145,7 @@ class BenthicNetDataset(torch.utils.data.Dataset):
 
 
 def get_dataset_by_station_split(file, validation_size=0.25, test_size=0.2, replace=False):
-    dataset = pd.read_csv(file, low_memory=False)
+    dataset = benthicnet.io.read_csv(file)
     dataset = dataset.drop_duplicates()
     dataset = dataset[dataset["dst"]!='nrcan']
     #dataset = dataset[dataset["dst"]!='Chesterfield']
