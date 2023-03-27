@@ -41,12 +41,8 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
         self.dataframe = benthicnet.io.read_csv(csv_file)
         #self.dataframe = self.dataframe.head(64)
         if "path" not in self.dataframe.columns:
-            self.dataframe["path"] = (
-                    self.dataframe["dataset"]
-                    + "/"
-                    + self.dataframe["site"]
-                    + "/"
-                    + self.dataframe["image"]
+            self.dataframe["path"] = benthicnet.io.determine_outpath(
+                self.dataframe, use_url_extension=False
             )
         self.dataframe["tarname"] = self.dataframe["dataset"] + ".tar"
         self.transform = transform
