@@ -172,4 +172,4 @@ def get_dataset_by_station_split(file, validation_size=0.25, test_size=0.2, repl
     print("test same\n", test_same_data[['label']].value_counts())
     print("test other\n", test_other_data[['label']].value_counts())
 
-    return training_data, validation_data, test_same_data, test_other_data   
+    return training_data, validation_data, test_same_data, test_other_data
