@@ -116,7 +116,7 @@ class BenthicNetDataset(torch.utils.data.Dataset):
         if type(row["image"]) is float:
             row["image"] = row["url"].split("/")[-1]
             print(row)
-        img_name = ".".join(row["image"].split(".")[:-1])     
+        img_name = ".".join(row["image"].split(".")[:-1])
         path = row["dataset"]+"/"+row["site"]+"/"+img_name+".jpg"
         node_file_path = os.path.join(os.environ['SLURM_TMPDIR'], path)
         if os.path.isfile(node_file_path):
@@ -141,8 +141,8 @@ class BenthicNetDataset(torch.utils.data.Dataset):
             sample = self.transform(sample)
 
         return sample, row['label_id'], #path
-    
-    
+
+
 def get_dataset_by_station_split(file, validation_size=0.25, test_size=0.2, replace=False):
     dataset = pd.read_csv(file, low_memory=False)
     dataset = dataset.drop_duplicates()
