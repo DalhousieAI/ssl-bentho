@@ -12,26 +12,25 @@ import PIL.Image
 import torch.utils.data
 
 class BenthicNetDatasetSSL(torch.utils.data.Dataset):
-    """BenthicNet dataset."""
+    """
+    Dataset for unannotated BenthicNet data.
+
+    Parameters
+    ----------
+    root_dir : str
+        Directory with all the images.
+    csv_file : str
+        Path to the csv file with annotations.
+    transform : callable, optional
+        Optional transform to be applied on a sample.
+    yield_pseudo_label : bool, default=True
+        Whether to yield a constant label-like int as well as the image.
+        N.B. The dataset is unlabelled so the label is always ``0``.
+    """
 
     def __init__(
             self, root_dir, csv_file=None, transform=None, yield_pseudo_label=True
     ):
-        """
-        Dataset for BenthicNet data.
-
-        Parameters
-        ----------
-        root_dir : str
-            Directory with all the images.
-        csv_file : str
-            Path to the csv file with annotations.
-        transform : callable, optional
-            Optional transform to be applied on a sample.
-        yield_pseudo_label : bool, default=True
-            Whether to yield a constant label-like int as well as the image.
-            N.B. The dataset is unlabelled so the label is always ``0``.
-        """
         if csv_file is None:
             csv_file = os.path.join(root_dir, "dataset.csv")
         self.root_dir = root_dir
@@ -93,23 +92,22 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
 
 
 class BenthicNetDataset(torch.utils.data.Dataset):
-    """BenthicNet dataset."""
+    """
+    Dataset for annotated BenthicNet data.
+
+    Parameters
+    ----------
+    tar_dir : str
+        Directory with all the images.
+    annotations : str
+        Dataframe with annotations.
+    transform : callable, optional
+        Optional transform to be applied on a sample.
+    """
 
     def __init__(
             self, tar_dir, annotations=None, transform=None
     ):
-        """
-        Dataset for BenthicNet data.
-
-        Parameters
-        ----------
-        tar_dir : str
-            Directory with all the images.
-        annotations : str
-            Dataframe with annotations.
-        transform : callable, optional
-            Optional transform to be applied on a sample.
-        """
         self.tar_dir = tar_dir
         self.dataframe = annotations
         # self.dataframe = self.dataframe.head(64)
