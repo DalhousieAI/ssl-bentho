@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 import tarfile
+import tempfile
 import torch
 
 import numpy as np
@@ -61,6 +62,7 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
         if os.path.isfile(node_file_path):
             sample = PIL.Image.open(node_file_path)
         else:
+            # Need to load the file from the tarball over the network
             with tarfile.open(os.path.join(self.tar_dir, row["tarname"]), mode="r") as t:
                 sample = PIL.Image.open(t.extractfile(row["path"]))
                 # PIL.Image has lazy data loading. But PIL won't be able to access
@@ -68,10 +70,20 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
                 # to manually trigger the loading of the data now.
                 sample.load()
                 #print(time.time() - start_time)
-            node_file_temp_path = os.path.join(os.environ['SLURM_TMPDIR'], row["image"])
-            sample.save(node_file_temp_path)
-            os.makedirs(os.path.join(os.environ['SLURM_TMPDIR'], row["dataset"], row["site"]), exist_ok=True)
-            shutil.move(node_file_temp_path, node_file_path)
+            # Other workers might try to access the same image at the same
+            # time, creating a race condition. If we've started writing the
+            # output, there will be a partially written file which can't be
+            # loaded. To avoid another worker trying to read our partially
+            # written file, we write the output to a temp file and
+            # then move the file to the target location once it is done.
+            with tempfile.TemporaryDirectory() as dir_tmp:
+                # Write to a temporary file
+                node_file_temp_path = os.path.join(dir_tmp, os.path.basename(row["path"]))
+                sample.save(node_file_temp_path)
+                # Move our temporary file to the destination
+                os.makedirs(os.path.dirname(node_file_path), exist_ok=True)
+                shutil.move(node_file_temp_path, node_file_path)
+
         load_time = time.time() - start_time
         #print("load time:", load_time)
 
@@ -116,12 +128,13 @@ class BenthicNetDataset(torch.utils.data.Dataset):
         if type(row["image"]) is float:
             row["image"] = row["url"].split("/")[-1]
             print(row)
-        img_name = ".".join(row["image"].split(".")[:-1])     
+        img_name = ".".join(row["image"].split(".")[:-1])
         path = row["dataset"]+"/"+row["site"]+"/"+img_name+".jpg"
         node_file_path = os.path.join(os.environ['SLURM_TMPDIR'], path)
         if os.path.isfile(node_file_path):
             sample = PIL.Image.open(node_file_path)
         else:
+            # Need to load the file from the tarball over the network
             with tarfile.open(os.path.join(self.tar_dir, row["tarname"]), mode="r") as t:
                 #print(row)
                 sample = PIL.Image.open(t.extractfile(path))
@@ -130,10 +143,21 @@ class BenthicNetDataset(torch.utils.data.Dataset):
                 # to manually trigger the loading of the data now.
                 sample.load()
                 # print(time.time() - start_time)
-            node_file_temp_path = os.path.join(os.environ['SLURM_TMPDIR'], img_name+".jpg")
-            sample.save(node_file_temp_path)
-            os.makedirs(os.path.join(os.environ['SLURM_TMPDIR'], row["dataset"], row["site"]), exist_ok=True)
-            shutil.move(node_file_temp_path, node_file_path)
+
+            # Other workers might try to access the same image at the same
+            # time, creating a race condition. If we've started writing the
+            # output, there will be a partially written file which can't be
+            # loaded. To avoid another worker trying to read our partially
+            # written file, we write the output to a temp file and
+            # then move the file to the target location once it is done.
+            with tempfile.TemporaryDirectory() as dir_tmp:
+                # Write to a temporary file
+                node_file_temp_path = os.path.join(dir_tmp, os.path.basename(row["path"]))
+                sample.save(node_file_temp_path)
+                # Move our temporary file to the destination
+                os.makedirs(os.path.dirname(node_file_path), exist_ok=True)
+                shutil.move(node_file_temp_path, node_file_path)
+
         #load_time = time.time() - start_time
         #print("load time:", load_time)
 
@@ -141,8 +165,8 @@ class BenthicNetDataset(torch.utils.data.Dataset):
             sample = self.transform(sample)
 
         return sample, row['label_id'], #path
-    
-    
+
+
 def get_dataset_by_station_split(file, validation_size=0.25, test_size=0.2, replace=False):
     dataset = pd.read_csv(file, low_memory=False)
     dataset = dataset.drop_duplicates()
@@ -172,4 +196,4 @@ def get_dataset_by_station_split(file, validation_size=0.25, test_size=0.2, repl
     print("test same\n", test_same_data[['label']].value_counts())
     print("test other\n", test_other_data[['label']].value_counts())
 
-    return training_data, validation_data, test_same_data, test_other_data   
+    return training_data, validation_data, test_same_data, test_other_data
