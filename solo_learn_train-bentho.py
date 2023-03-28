@@ -70,12 +70,12 @@ def main():
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    root_dir = "/home/isaacxu/projects/rrg-ttt/become/benthicnet-compiled/compiled_250s_512px/"
+    root_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_250s_512px/"
     csv_file_name = "dataset_2022-04-22.csv"
     if args.mini:
         csv_file_name = "mini-"+csv_file_name
     csv_file_ssl = root_dir+csv_file_name
-    tar_dir = "/home/isaacxu/projects/rrg-ttt/become/benthicnet-compiled/compiled_labelled_512px/tar/"
+    tar_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_labelled_512px/tar/"
     lab_csv_file = "./Catami/WFdataset_subd3.csv"
 
     _, validation_data, test_same_data, test_other_data = benthic_data_classes.definitions.get_dataset_by_station_split(lab_csv_file)
