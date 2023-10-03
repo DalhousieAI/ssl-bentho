@@ -4,7 +4,7 @@
 import argparse
 from argparse import Namespace
 
-import benthic_data_classes.definitions
+import benthic_data_classes.datasets
 
 import json
 import os
@@ -78,7 +78,7 @@ def main():
     tar_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_labelled_512px/tar/"
     lab_csv_file = "./Catami/WFdataset_subd3.csv"
 
-    _, validation_data, test_same_data, test_other_data = benthic_data_classes.definitions.get_dataset_by_station_split(lab_csv_file)
+    _, validation_data, test_same_data, test_other_data = benthic_data_classes.datasets.get_dataset_by_station_split(lab_csv_file)
 
     # common parameters for all methods
     # some parameters for extra functionally are missing, but don't mind this for now.
@@ -110,7 +110,7 @@ def main():
     transform = prepare_n_crop_transform([transform], num_crops_per_aug=[kwargs["data"]["num_large_crops"]])
 
 
-    train_dataset = benthic_data_classes.definitions.BenthicNetDatasetSSL(root_dir, csv_file_ssl, transform)
+    train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(root_dir, csv_file_ssl, transform)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                batch_size=kwargs["optimizer"]["batch_size"],
                                                shuffle=True,
@@ -125,7 +125,7 @@ def main():
          transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.228, 0.224, 0.225)),
     ])
 
-    val_dataset = benthic_data_classes.definitions.BenthicNetDataset(tar_dir, validation_data, val_transforms)
+    val_dataset = benthic_data_classes.datasets.BenthicNetDataset(tar_dir, validation_data, val_transforms)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
                                                 batch_size=kwargs["optimizer"]["batch_size"],
                                                 shuffle=False,
