@@ -43,4 +43,4 @@ srun python ./solo_learn_train-bentho.py \
 	--gpus $GPUS_PER_NODE \
 	--name "byol-100e" \
 	"${@}"
-	
+

@@ -2,67 +2,83 @@
 # coding: utf-8
 
 import argparse
-from argparse import Namespace
-
-import benthic_data_classes.datasets
-
 import json
 import os
+from argparse import Namespace
+
+import numpy as np
 import torch
-from pytorch_lightning import Trainer
-from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy
-from pytorch_lightning.strategies.ddp import DDPStrategy
 
 # Shakhboz's imports
 import torchvision.transforms as transforms
-import numpy as np
+from omegaconf import OmegaConf
+from pytorch_lightning import Trainer
+from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.strategies.ddp import DDPStrategy
+from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy
+from solo.data.pretrain_dataloader import (
+    build_transform_pipeline,
+    prepare_n_crop_transform,
+)
 
 # Solo-Learn import
-from solo.methods import BarlowTwins, SimCLR, MoCoV2Plus, MAE, SimSiam, BYOL, MoCoV3  # imports the method class
+from solo.methods import (  # imports the method class
+    BYOL,
+    MAE,
+    BarlowTwins,
+    MoCoV2Plus,
+    MoCoV3,
+    SimCLR,
+    SimSiam,
+)
 from solo.utils.checkpointer import Checkpointer
+
+import benthic_data_classes.datasets
 
 # and some utilities to perform data loading for the method itself, including augmentation pipelines
 
-from solo.data.pretrain_dataloader import (
-    prepare_n_crop_transform,
-    build_transform_pipeline,
-)
-
-from omegaconf import OmegaConf
 
 METHODS = {
-    "bt" : BarlowTwins,
+    "bt": BarlowTwins,
     "simclr": SimCLR,
     "mocov2+": MoCoV2Plus,
     "mocov3": MoCoV3,
     "mae": MAE,
     "simsiam": SimSiam,
-    "byol": BYOL
+    "byol": BYOL,
 }
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Parameters for SSL benthic habitat project')
+    parser = argparse.ArgumentParser(
+        description="Parameters for SSL benthic habitat project"
+    )
 
     # Required parameters
-    parser.add_argument('--ssl_cfg', type=str, required=True,
-                            help='set cfg file for SSL')
-    parser.add_argument('--aug_stack_cfg', type=str, required=True,
-                            help='set cfg file for augmentations')
-    parser.add_argument('--nodes', type=int, required=True,
-                            help='number of nodes')
-    parser.add_argument('--gpus', type=int, required=True,
-                            help='number of gpus per node')
-    parser.add_argument('--method', type=str, required=True,
-                            help='type of SSL method')
+    parser.add_argument(
+        "--ssl_cfg", type=str, required=True, help="set cfg file for SSL"
+    )
+    parser.add_argument(
+        "--aug_stack_cfg",
+        type=str,
+        required=True,
+        help="set cfg file for augmentations",
+    )
+    parser.add_argument("--nodes", type=int, required=True, help="number of nodes")
+    parser.add_argument(
+        "--gpus", type=int, required=True, help="number of gpus per node"
+    )
+    parser.add_argument("--method", type=str, required=True, help="type of SSL method")
     # Other parameters
-    parser.add_argument('--mini', type=bool, default=False,
-                            help='use mini-dataset')
-    parser.add_argument('--seed', type=int, default=0,
-                            help='random seed (default: 0)')
-    parser.add_argument('--name', type=str, default='self-supervised_learning',
-                            help='set name for the run')
+    parser.add_argument("--mini", type=bool, default=False, help="use mini-dataset")
+    parser.add_argument("--seed", type=int, default=0, help="random seed (default: 0)")
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="self-supervised_learning",
+        help="set name for the run",
+    )
 
     args = parser.parse_args()
 
@@ -73,12 +89,17 @@ def main():
     root_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_250s_512px/"
     csv_file_name = "dataset_2022-04-22.csv"
     if args.mini:
-        csv_file_name = "mini-"+csv_file_name
-    csv_file_ssl = root_dir+csv_file_name
+        csv_file_name = "mini-" + csv_file_name
+    csv_file_ssl = root_dir + csv_file_name
     tar_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_labelled_512px/tar/"
     lab_csv_file = "./Catami/WFdataset_subd3.csv"
 
-    _, validation_data, test_same_data, test_other_data = benthic_data_classes.datasets.get_dataset_by_station_split(lab_csv_file)
+    (
+        _,
+        validation_data,
+        test_same_data,
+        test_other_data,
+    ) = benthic_data_classes.datasets.get_dataset_by_station_split(lab_csv_file)
 
     # common parameters for all methods
     # some parameters for extra functionally are missing, but don't mind this for now.
@@ -107,32 +128,43 @@ def main():
 
     # then, we wrap the pipepline using this utility function
     # to make it produce an arbitrary number of crops
-    transform = prepare_n_crop_transform([transform], num_crops_per_aug=[kwargs["data"]["num_large_crops"]])
+    transform = prepare_n_crop_transform(
+        [transform], num_crops_per_aug=[kwargs["data"]["num_large_crops"]]
+    )
 
+    train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(
+        root_dir, csv_file_ssl, transform
+    )
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_size=kwargs["optimizer"]["batch_size"],
+        shuffle=True,
+        pin_memory=True,
+        drop_last=True,
+        num_workers=kwargs["num_workers"],
+    )
 
-    train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(root_dir, csv_file_ssl, transform)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=kwargs["optimizer"]["batch_size"],
-                                               shuffle=True,
-                                               pin_memory=True,
-                                               drop_last=True,
-                                               num_workers=kwargs["num_workers"])
+    val_transforms = transforms.Compose(
+        [
+            transforms.Resize(256),  # resize shorter
+            transforms.CenterCrop(224),  # take center crop
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.228, 0.224, 0.225)),
+        ]
+    )
 
-    val_transforms = transforms.Compose([
-         transforms.Resize(256),  # resize shorter
-         transforms.CenterCrop(224),  # take center crop
-         transforms.ToTensor(),
-         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.228, 0.224, 0.225)),
-    ])
+    val_dataset = benthic_data_classes.datasets.BenthicNetDataset(
+        tar_dir, validation_data, val_transforms
+    )
+    val_loader = torch.utils.data.DataLoader(
+        dataset=val_dataset,
+        batch_size=kwargs["optimizer"]["batch_size"],
+        shuffle=False,
+        pin_memory=True,
+        num_workers=kwargs["num_workers"],
+    )
 
-    val_dataset = benthic_data_classes.datasets.BenthicNetDataset(tar_dir, validation_data, val_transforms)
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                                batch_size=kwargs["optimizer"]["batch_size"],
-                                                shuffle=False,
-                                                pin_memory=True,
-                                                num_workers=kwargs["num_workers"])
-
-    os.environ['WANDB_NOTEBOOK_NAME'] = './solo_learn_train-bentho.ipynb'
+    os.environ["WANDB_NOTEBOOK_NAME"] = "./solo_learn_train-bentho.ipynb"
 
     run_name = args.name
 
@@ -158,8 +190,8 @@ def main():
 
     ckpt = Checkpointer(
         ckpt_args,
-        logdir="./checkpoints/"+run_name,
-        frequency=kwargs["max_epochs"]-1,
+        logdir="./checkpoints/" + run_name,
+        frequency=kwargs["max_epochs"] - 1,
     )
     callbacks.append(ckpt)
 
@@ -177,6 +209,7 @@ def main():
     )
 
     trainer.fit(model, train_loader, val_loader)
+
 
 if __name__ == "__main__":
     main()
