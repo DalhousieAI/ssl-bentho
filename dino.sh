@@ -8,7 +8,7 @@
 #SBATCH --output=logs/%x_%A-%a_%n-%t.out
                                     # %x=job-name, %A=job ID, %a=array value, %n=node rank, %t=task rank, %N=hostname
                                     # Note: You must manually create output directory "logs" before launching job.
-#SBATCH --job-name=mcv3
+#SBATCH --job-name=dino
 #SBATCH --account=def-ttt			# Use default account
 
 GPUS_PER_NODE=4
@@ -43,10 +43,9 @@ source "./slurm/copy_and_extract_data.sh"
 echo "EXTRA_ARGS = ${@}"
 
 srun python ./solo_learn_train-bentho.py \
-	--ssl_cfg "mocov3.cfg" \
-	--method "mocov3" \
-	--aug_stack_cfg "simclr_aug_stack.cfg" \
+	--ssl_cfg "dino.cfg" \
+	--method "dino" \
 	--nodes $SLURM_JOB_NUM_NODES \
 	--gpus $GPUS_PER_NODE \
-	--name "mocov3-100e" \
+	--name "dino-100e" \
 	"${@}"

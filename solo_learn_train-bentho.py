@@ -2,67 +2,87 @@
 # coding: utf-8
 
 import argparse
-from argparse import Namespace
-
-import benthic_data_classes.datasets
-
 import json
 import os
+from datetime import datetime
+
+import numpy as np
 import torch
+from omegaconf import OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy
-from pytorch_lightning.strategies.ddp import DDPStrategy
-
-# Shakhboz's imports
-import torchvision.transforms as transforms
-import numpy as np
-
-# Solo-Learn import
-from solo.methods import BarlowTwins, SimCLR, MoCoV2Plus, MAE, SimSiam, BYOL, MoCoV3  # imports the method class
-from solo.utils.checkpointer import Checkpointer
-
-# and some utilities to perform data loading for the method itself, including augmentation pipelines
-
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from solo.data.pretrain_dataloader import (
-    prepare_n_crop_transform,
     build_transform_pipeline,
+    prepare_n_crop_transform,
+)
+from solo.methods import (
+    BYOL,
+    DINO,
+    MAE,
+    BarlowTwins,
+    MoCoV2Plus,
+    MoCoV3,
+    SimCLR,
+    SimSiam,
 )
 
-from omegaconf import OmegaConf
+import benthic_data_classes.datasets
+from utils.benthicnet.io import read_csv
 
 METHODS = {
-    "bt" : BarlowTwins,
+    "bt": BarlowTwins,
+    "dino": DINO,
     "simclr": SimCLR,
     "mocov2+": MoCoV2Plus,
     "mocov3": MoCoV3,
     "mae": MAE,
     "simsiam": SimSiam,
-    "byol": BYOL
+    "byol": BYOL,
 }
 
+
+def get_df(in_path):
+    df = read_csv(
+        fname=in_path, expect_datetime=False, index_col=None, low_memory=False
+    )
+    return df
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Parameters for SSL benthic habitat project')
+    parser = argparse.ArgumentParser(
+        description="Parameters for SSL benthic habitat project"
+    )
 
     # Required parameters
-    parser.add_argument('--ssl_cfg', type=str, required=True,
-                            help='set cfg file for SSL')
-    parser.add_argument('--aug_stack_cfg', type=str, required=True,
-                            help='set cfg file for augmentations')
-    parser.add_argument('--nodes', type=int, required=True,
-                            help='number of nodes')
-    parser.add_argument('--gpus', type=int, required=True,
-                            help='number of gpus per node')
-    parser.add_argument('--method', type=str, required=True,
-                            help='type of SSL method')
+    parser.add_argument(
+        "--ssl_cfg", type=str, required=True, help="set cfg file for SSL"
+    )
+    parser.add_argument("--nodes", type=int, required=True, help="number of nodes")
+    parser.add_argument(
+        "--gpus", type=int, required=True, help="number of gpus per node"
+    )
+    parser.add_argument("--method", type=str, required=True, help="select SSL method")
     # Other parameters
-    parser.add_argument('--mini', type=bool, default=False,
-                            help='use mini-dataset')
-    parser.add_argument('--seed', type=int, default=0,
-                            help='random seed (default: 0)')
-    parser.add_argument('--name', type=str, default='self-supervised_learning',
-                            help='set name for the run')
+    parser.add_argument(
+        "--aug_stack_cfg",
+        type=str,
+        default="simclr_aug_stack.cfg",
+        help="set cfg file for augmentations",
+    )
+    parser.add_argument(
+        "--csv_file_path",
+        type=str,
+        default="./data_csv/benthicnet_unlabelled_nn.csv",
+        help="set path to csv file",
+    )
+    parser.add_argument("--seed", type=int, default=0, help="random seed (default: 0)")
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="self-supervised_learning",
+        help="set name for the run",
+    )
 
     args = parser.parse_args()
 
@@ -70,22 +90,18 @@ def main():
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    root_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_250s_512px/"
-    csv_file_name = "dataset_2022-04-22.csv"
-    if args.mini:
-        csv_file_name = "mini-"+csv_file_name
-    csv_file_ssl = root_dir+csv_file_name
-    tar_dir = "/project/rrg-ttt/become/benthicnet-compiled/compiled_labelled_512px/tar/"
-    lab_csv_file = "./Catami/WFdataset_subd3.csv"
-
-    _, validation_data, test_same_data, test_other_data = benthic_data_classes.datasets.get_dataset_by_station_split(lab_csv_file)
+    root_dir = (
+        "/lustre06/project/6012565/become/benthicnet-compiled/compiled_unlabelled_512px"
+    )
+    ssl_csv_path = args.csv_file_path
+    ssl_csv = get_df(ssl_csv_path)
 
     # common parameters for all methods
     # some parameters for extra functionally are missing, but don't mind this for now.
 
     ssl_cfg_name = args.ssl_cfg
 
-    with open("./ssl_cfgs/" + ssl_cfg_name) as f:
+    with open("./ssl_cfgs/" + ssl_cfg_name, encoding="utf-8") as f:
         ssl_cfg = f.read()
 
     kwargs = json.loads(ssl_cfg)
@@ -93,90 +109,130 @@ def main():
 
     model = METHODS[args.method](cfg)
 
-    # we first prepare our single transformation pipeline
+    if args.method == "dino":
+        with open("./ssl_cfgs/aug_stacks/dino_first_global.cfg", encoding="utf-8") as f:
+            dino_first_global_cfg = f.read()
 
-    aug_stack_name = args.aug_stack_cfg
+        with open(
+            "./ssl_cfgs/aug_stacks/dino_second_global.cfg", encoding="utf-8"
+        ) as f:
+            dino_second_global_cfg = f.read()
 
-    with open("./ssl_cfgs/aug_stacks/" + aug_stack_name) as f:
-        aug_stack_cfg = f.read()
+        with open("./ssl_cfgs/aug_stacks/dino_local.cfg", encoding="utf-8") as f:
+            dino_local_cfg = f.read()
 
-    transform_kwargs = json.loads(aug_stack_cfg)
-    transform_cfg = OmegaConf.create(transform_kwargs)
+        dino_first_global_kwargs = json.loads(dino_first_global_cfg)
+        dino_second_global_kwargs = json.loads(dino_second_global_cfg)
+        dino_local_kwargs = json.loads(dino_local_cfg)
 
-    transform = build_transform_pipeline("custom", transform_cfg)
+        dino_first_global_cfg = OmegaConf.create(dino_first_global_kwargs)
+        dino_second_global_cfg = OmegaConf.create(dino_second_global_kwargs)
+        dino_local_cfg = OmegaConf.create(dino_local_kwargs)
 
-    # then, we wrap the pipepline using this utility function
-    # to make it produce an arbitrary number of crops
-    transform = prepare_n_crop_transform([transform], num_crops_per_aug=[kwargs["data"]["num_large_crops"]])
+        dino_first_global_transform = build_transform_pipeline(
+            "custom", dino_first_global_cfg
+        )
+        dino_second_global_transform = build_transform_pipeline(
+            "custom", dino_second_global_cfg
+        )
+        dino_local_transform = build_transform_pipeline("custom", dino_local_cfg)
 
+        dino_first_global_transform = prepare_n_crop_transform(
+            [dino_first_global_transform],
+            num_crops_per_aug=[int(kwargs["data"]["num_large_crops"] / 2)],
+        )
+        dino_second_global_transform = prepare_n_crop_transform(
+            [dino_second_global_transform],
+            num_crops_per_aug=[int(kwargs["data"]["num_large_crops"] / 2)],
+        )
+        dino_local_transform = prepare_n_crop_transform(
+            [dino_local_transform],
+            num_crops_per_aug=[kwargs["data"]["num_small_crops"]],
+        )
 
-    train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(root_dir, csv_file_ssl, transform)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=kwargs["optimizer"]["batch_size"],
-                                               shuffle=True,
-                                               pin_memory=True,
-                                               drop_last=True,
-                                               num_workers=kwargs["num_workers"])
+        train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(
+            root_dir,
+            ssl_csv,
+            [
+                dino_first_global_transform,
+                dino_second_global_transform,
+                dino_local_transform,
+            ],
+        )
 
-    val_transforms = transforms.Compose([
-         transforms.Resize(256),  # resize shorter
-         transforms.CenterCrop(224),  # take center crop
-         transforms.ToTensor(),
-         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.228, 0.224, 0.225)),
-    ])
+    else:
+        # we first prepare our single transformation pipeline
 
-    val_dataset = benthic_data_classes.datasets.BenthicNetDataset(tar_dir, validation_data, val_transforms)
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                                batch_size=kwargs["optimizer"]["batch_size"],
-                                                shuffle=False,
-                                                pin_memory=True,
-                                                num_workers=kwargs["num_workers"])
+        aug_stack_name = args.aug_stack_cfg
 
-    os.environ['WANDB_NOTEBOOK_NAME'] = './solo_learn_train-bentho.ipynb'
+        with open("./ssl_cfgs/aug_stacks/" + aug_stack_name, encoding="utf-8") as f:
+            aug_stack_cfg = f.read()
+
+        transform_kwargs = json.loads(aug_stack_cfg)
+        transform_cfg = OmegaConf.create(transform_kwargs)
+
+        transform = build_transform_pipeline("custom", transform_cfg)
+
+        # then, we wrap the pipepline using this utility function
+        # to make it produce an arbitrary number of crops
+        transform = prepare_n_crop_transform(
+            [transform], num_crops_per_aug=[kwargs["data"]["num_large_crops"]]
+        )
+
+        train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(
+            root_dir, ssl_csv, transform
+        )
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_size=kwargs["optimizer"]["batch_size"],
+        shuffle=True,
+        pin_memory=True,
+        drop_last=True,
+        num_workers=kwargs["num_workers"],
+    )
 
     run_name = args.name
 
-    wandb_logger = pl_loggers.WandbLogger(
-        name=run_name,  # name of the experiment
-        project="self-supervised_benthoscape",  # name of the wandb project
-        entity=None,
-        offline=False,
-    )
-    wandb_logger.watch(model, log="gradients", log_freq=100)
+    # Set up callbacks
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    directory_path = os.path.join("checkpoints", timestamp)
 
-    callbacks = []
+    csv_logger = pl_loggers.CSVLogger(
+        "logs", name=run_name + "_logs", version=timestamp
+    )
+
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=directory_path,
+        filename=args.name + "_{epoch:03d}",
+        save_top_k=1,
+        mode="min",
+        every_n_epochs=cfg.max_epochs,
+        save_weights_only=True,
+    )
 
     # automatically log our learning rate
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
-    callbacks.append(lr_monitor)
 
     # checkpointer can automatically log your parameters,
     # but we need to wrap it on a Namespace object
 
-    ckpt_args = OmegaConf.create({"name": run_name})
-    # saves the checkout after every epoch
+    callbacks = [checkpoint_callback, lr_monitor]
 
-    ckpt = Checkpointer(
-        ckpt_args,
-        logdir="./checkpoints/"+run_name,
-        frequency=kwargs["max_epochs"]-1,
-    )
-    callbacks.append(ckpt)
+    # Adapt for pytorch lightning 2.0+
 
-    trainer_args = Namespace(**kwargs)
-
-    trainer = Trainer.from_argparse_args(
-        trainer_args,
-        logger=wandb_logger,
+    trainer = Trainer(
+        logger=csv_logger,
         callbacks=callbacks,
-        strategy=DDPStrategy(find_unused_parameters=False),
-        accelerator="cuda",
+        strategy="auto",
+        accelerator="auto",
+        log_every_n_steps=200,
         num_nodes=args.nodes,
         devices=args.gpus,
-        log_every_n_steps=200,
+        max_epochs=cfg.max_epochs,
     )
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader)
+
 
 if __name__ == "__main__":
     main()
