@@ -57,6 +57,9 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
             crops += self.transform[1](sample)
             crops += self.transform[2](sample)
 
+            if self.yield_pseudo_label:
+                return 0, crops, 0
+
             return crops
 
         if self.transform:
