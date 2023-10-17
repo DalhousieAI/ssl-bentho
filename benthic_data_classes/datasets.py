@@ -12,7 +12,6 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        tar_dir,
         annotations=None,
         transform=None,
         yield_pseudo_label=True,
@@ -22,14 +21,14 @@ class BenthicNetDatasetSSL(torch.utils.data.Dataset):
 
         Parameters
         ----------
-        tar_dir : str
-            Directory with all the images.
         annotations : str
             Dataframe with annotations.
         transform : callable, optional
             Optional transform to be applied on a sample.
+        yield_pseudo_label : bool, optional
+            Whether to yield pseudo labels for accomodating
+            solo-learn's training loop (default is True).
         """
-        self.tar_dir = tar_dir
         self.dataframe = annotations.copy()
         self.dataframe.loc[:, "tarname"] = self.dataframe.loc[:, "dataset"] + ".tar"
         self.transform = transform

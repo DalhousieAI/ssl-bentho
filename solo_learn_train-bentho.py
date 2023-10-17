@@ -90,9 +90,6 @@ def main():
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    root_dir = (
-        "/lustre06/project/6012565/become/benthicnet-compiled/compiled_unlabelled_512px"
-    )
     ssl_csv_path = args.csv_file_path
     ssl_csv = get_df(ssl_csv_path)
 
@@ -151,7 +148,6 @@ def main():
         )
 
         train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(
-            root_dir,
             ssl_csv,
             [
                 dino_first_global_transform,
@@ -180,7 +176,7 @@ def main():
         )
 
         train_dataset = benthic_data_classes.datasets.BenthicNetDatasetSSL(
-            root_dir, ssl_csv, transform
+            ssl_csv, transform
         )
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
