@@ -5,7 +5,7 @@ This repo exists to document and demonstrate how self-supervised models were pre
 The code leverages the [Solo-learn](https://github.com/vturrisi/solo-learn) library for implementation of SSL methods.
 
 ## Getting Started
-To install benthicnet, use
+To install benthicnet utility functions, use
 ```
 python -m pip install git+ssh://git@github.com:DalhousieAI/BenthicNet.git
 ```
