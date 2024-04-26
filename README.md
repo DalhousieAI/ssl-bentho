@@ -9,7 +9,7 @@ To install benthicnet utility functions, use
 ```
 python -m pip install git+ssh://git@github.com:DalhousieAI/BenthicNet.git
 ```
-If seeking to use the code presented here, please see [Solo-learn](https://github.com/vturrisi/solo-learn) for instructions in installing this dependent library.
+If seeking to use the code presented here, please see [Solo-learn](https://github.com/vturrisi/solo-learn) for instructions in installing this dependent library (this code repository was tested with solo-learn=1.0.6).
 
 ## Contact
 For questions or concerns, please contact [isaac.xu@dal.ca](mailto:isaac.xu@dal.ca).
